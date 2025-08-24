@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Video, Car, Check, X, Calendar, Download, Upload } from 'lucide-react';
+import { Plus, Edit2, Trash2, Video, Car, Check, X, Calendar, Download, Upload, CalendarDays } from 'lucide-react';
 import { Client, Session } from '../App';
 
 interface SessionTrackingProps {
@@ -37,6 +37,69 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
     const a = document.createElement('a');
     a.href = url;
     a.download = 'session-import-template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const exportToCalendar = () => {
+    const icsEvents = sessions.map(session => {
+      const client = clients.find(c => c.id === session.clientId);
+      const clientName = client?.name || 'Unknown Client';
+      
+      // Create start and end times (assuming 1-hour default if no duration)
+      const sessionDate = new Date(session.date);
+      const startTime = new Date(sessionDate);
+      startTime.setHours(9, 0, 0, 0); // Default to 9 AM
+      
+      const endTime = new Date(startTime);
+      endTime.setHours(startTime.getHours() + session.duration);
+      
+      // Format dates for ICS (YYYYMMDDTHHMMSSZ)
+      const formatICSDate = (date: Date) => {
+        return date.toISOString().replace(/[-:]/g, '').replace(/\.\d{3}/, '');
+      };
+      
+      const summary = `Tutoring Session - ${clientName}`;
+      const description = [
+        `Client: ${clientName}`,
+        `Duration: ${session.duration} hours`,
+        `Rate: $${session.rate}/hour`,
+        `Total: $${session.totalEarned.toFixed(2)}`,
+        `Type: ${session.type}`,
+        `Payment Status: ${session.paid ? 'Paid' : 'Unpaid'}`,
+        session.mileage ? `Mileage: ${session.mileage} miles` : '',
+        session.notes ? `Notes: ${session.notes}` : ''
+      ].filter(Boolean).join('\\n');
+      
+      const location = session.type === 'in-person' ? (client?.address || 'Client Location') : 'Virtual Session';
+      
+      return [
+        'BEGIN:VEVENT',
+        `DTSTART:${formatICSDate(startTime)}`,
+        `DTEND:${formatICSDate(endTime)}`,
+        `SUMMARY:${summary}`,
+        `DESCRIPTION:${description}`,
+        `LOCATION:${location}`,
+        `UID:tutor-session-${session.id}@tutortracker.app`,
+        'STATUS:CONFIRMED',
+        'END:VEVENT'
+      ].join('\r\n');
+    });
+    
+    const icsContent = [
+      'BEGIN:VCALENDAR',
+      'VERSION:2.0',
+      'PRODID:-//TutorTracker//Tutoring Sessions//EN',
+      'CALSCALE:GREGORIAN',
+      ...icsEvents,
+      'END:VCALENDAR'
+    ].join('\r\n');
+    
+    const blob = new Blob([icsContent], { type: 'text/calendar;charset=utf-8' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `tutoring-sessions-${new Date().getFullYear()}.ics`;
     a.click();
     window.URL.revokeObjectURL(url);
   };
@@ -239,6 +302,14 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
           >
             <Download className="h-5 w-5" />
             <span>Download Template</span>
+          </button>
+          <button
+            onClick={exportToCalendar}
+            disabled={sessions.length === 0}
+            className="flex items-center space-x-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+          >
+            <CalendarDays className="h-5 w-5" />
+            <span>Export Calendar</span>
           </button>
           <label className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
             <Upload className="h-5 w-5" />
