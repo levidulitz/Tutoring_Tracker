@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Edit2, Trash2, Video, Car, Check, X, Calendar } from 'lucide-react';
+import { Plus, Edit2, Trash2, Video, Car, Check, X, Calendar, Download, Upload } from 'lucide-react';
 import { Client, Session } from '../App';
 
 interface SessionTrackingProps {
@@ -10,6 +10,9 @@ interface SessionTrackingProps {
 
 const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, setSessions }) => {
   const [showForm, setShowForm] = useState(false);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [csvData, setCsvData] = useState<any[]>([]);
+  const [csvPreview, setCsvPreview] = useState<any[]>([]);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [formData, setFormData] = useState({
     clientId: '',
@@ -19,6 +22,117 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
     type: 'virtual' as 'virtual' | 'in-person',
     notes: ''
   });
+
+  const downloadTemplate = () => {
+    const template = [
+      ['Date', 'Client Name', 'Duration (hours)', 'Rate ($/hour)', 'Type', 'Paid', 'Notes'],
+      ['2024-01-15', 'John Smith', '1.5', '50', 'virtual', 'yes', 'Math tutoring session'],
+      ['2024-01-16', 'Jane Doe', '2', '45', 'in-person', 'no', 'Science homework help'],
+      ['2024-01-17', 'Bob Johnson', '1', '60', 'virtual', 'yes', 'English essay review']
+    ];
+    
+    const csv = template.map(row => row.join(',')).join('\n');
+    const blob = new Blob([csv], { type: 'text/csv' });
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'session-import-template.csv';
+    a.click();
+    window.URL.revokeObjectURL(url);
+  };
+
+  const handleFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split('\n').filter(line => line.trim());
+      const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, ''));
+      
+      const data = lines.slice(1).map((line, index) => {
+        const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+        const row: any = { _rowIndex: index + 2 }; // +2 because we skip header and 0-index
+        
+        headers.forEach((header, i) => {
+          const value = values[i] || '';
+          
+          // Map common header variations
+          if (header.toLowerCase().includes('date')) {
+            row.date = value;
+          } else if (header.toLowerCase().includes('client') || header.toLowerCase().includes('name')) {
+            row.clientName = value;
+          } else if (header.toLowerCase().includes('duration') || header.toLowerCase().includes('hours')) {
+            row.duration = value;
+          } else if (header.toLowerCase().includes('rate')) {
+            row.rate = value;
+          } else if (header.toLowerCase().includes('type')) {
+            row.type = value.toLowerCase() === 'in-person' ? 'in-person' : 'virtual';
+          } else if (header.toLowerCase().includes('paid')) {
+            row.paid = value.toLowerCase() === 'yes' || value.toLowerCase() === 'true';
+          } else if (header.toLowerCase().includes('notes')) {
+            row.notes = value;
+          }
+        });
+        
+        // Find matching client
+        const matchingClient = clients.find(c => 
+          c.name.toLowerCase() === row.clientName?.toLowerCase()
+        );
+        row.client = matchingClient;
+        row.clientId = matchingClient?.id;
+        
+        // Validate required fields
+        row.errors = [];
+        if (!row.date) row.errors.push('Date is required');
+        if (!row.clientName) row.errors.push('Client name is required');
+        if (!row.client) row.errors.push('Client not found - please add client first');
+        if (!row.duration || isNaN(parseFloat(row.duration))) row.errors.push('Valid duration required');
+        if (!row.rate || isNaN(parseFloat(row.rate))) row.errors.push('Valid rate required');
+        
+        return row;
+      });
+      
+      setCsvData(data);
+      setCsvPreview(data.slice(0, 10)); // Show first 10 rows
+      setShowImportModal(true);
+    };
+    
+    reader.readAsText(file);
+  };
+
+  const importSessions = () => {
+    const validRows = csvData.filter(row => row.errors.length === 0);
+    
+    const newSessions: Session[] = validRows.map(row => {
+      const client = row.client;
+      const duration = parseFloat(row.duration);
+      const rate = parseFloat(row.rate);
+      const mileage = row.type === 'in-person' ? (client?.distanceFromHome || 0) * 2 : 0;
+      
+      return {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        clientId: row.clientId,
+        date: row.date,
+        duration,
+        rate,
+        type: row.type,
+        mileage,
+        totalEarned: duration * rate,
+        paid: row.paid || false,
+        paidDate: row.paid ? new Date().toISOString().split('T')[0] : undefined,
+        notes: row.notes || ''
+      };
+    });
+    
+    setSessions([...sessions, ...newSessions]);
+    setShowImportModal(false);
+    setCsvData([]);
+    setCsvPreview([]);
+    
+    alert(`Successfully imported ${newSessions.length} sessions!`);
+  };
 
   const resetForm = () => {
     setFormData({
@@ -118,14 +232,33 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
           <h1 className="text-3xl font-bold text-gray-900">Session Tracking</h1>
           <p className="mt-2 text-gray-600">Track your tutoring sessions and payment status</p>
         </div>
-        <button
-          onClick={() => setShowForm(true)}
-          className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-          disabled={clients.length === 0}
-        >
-          <Plus className="h-5 w-5" />
-          <span>Log Session</span>
-        </button>
+        <div className="flex space-x-3">
+          <button
+            onClick={downloadTemplate}
+            className="flex items-center space-x-2 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+          >
+            <Download className="h-5 w-5" />
+            <span>Download Template</span>
+          </button>
+          <label className="flex items-center space-x-2 px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors cursor-pointer">
+            <Upload className="h-5 w-5" />
+            <span>Import CSV</span>
+            <input
+              type="file"
+              accept=".csv"
+              onChange={handleFileUpload}
+              className="hidden"
+            />
+          </label>
+          <button
+            onClick={() => setShowForm(true)}
+            className="flex items-center space-x-2 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
+            disabled={clients.length === 0}
+          >
+            <Plus className="h-5 w-5" />
+            <span>Log Session</span>
+          </button>
+        </div>
       </div>
 
       {clients.length === 0 && (
@@ -238,6 +371,99 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* CSV Import Modal */}
+      {showImportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-4xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Sessions from CSV</h2>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Preview of your data ({csvData.length} rows total, showing first 10):
+              </p>
+              
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Row</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Client</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Paid</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {csvPreview.map((row, index) => (
+                      <tr key={index} className={row.errors.length > 0 ? 'bg-red-50' : ''}>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row._rowIndex}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row.date}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">
+                          {row.clientName}
+                          {!row.client && row.clientName && (
+                            <span className="ml-1 text-red-500">❌</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row.duration}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row.rate}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row.type}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{row.paid ? 'Yes' : 'No'}</td>
+                        <td className="px-3 py-2 text-sm">
+                          {row.errors.length === 0 ? (
+                            <span className="text-green-600">✓ Valid</span>
+                          ) : (
+                            <div className="text-red-600">
+                              <div>❌ Errors:</div>
+                              <ul className="text-xs mt-1">
+                                {row.errors.map((error: string, i: number) => (
+                                  <li key={i}>• {error}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-medium text-blue-900 mb-2">Import Summary</h3>
+              <div className="text-sm text-blue-700">
+                <div>Total rows: {csvData.length}</div>
+                <div>Valid rows: {csvData.filter(row => row.errors.length === 0).length}</div>
+                <div>Rows with errors: {csvData.filter(row => row.errors.length > 0).length}</div>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={importSessions}
+                disabled={csvData.filter(row => row.errors.length === 0).length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Import {csvData.filter(row => row.errors.length === 0).length} Valid Sessions
+              </button>
+              <button
+                onClick={() => {
+                  setShowImportModal(false);
+                  setCsvData([]);
+                  setCsvPreview([]);
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
           </div>
         </div>
       )}
