@@ -11,8 +11,11 @@ interface SessionTrackingProps {
 const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, setSessions }) => {
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
+  const [showCalendarImportModal, setShowCalendarImportModal] = useState(false);
   const [csvData, setCsvData] = useState<any[]>([]);
   const [csvPreview, setCsvPreview] = useState<any[]>([]);
+  const [calendarData, setCalendarData] = useState<any[]>([]);
+  const [calendarPreview, setCalendarPreview] = useState<any[]>([]);
   const [editingSession, setEditingSession] = useState<Session | null>(null);
   const [formData, setFormData] = useState({
     clientId: '',
@@ -165,6 +168,222 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
     reader.readAsText(file);
   };
 
+  const handleCalendarFileUpload = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      let parsedEvents: any[] = [];
+
+      if (file.name.toLowerCase().endsWith('.ics')) {
+        // Parse ICS file
+        parsedEvents = parseICSFile(text);
+      } else if (file.name.toLowerCase().endsWith('.csv') || file.name.toLowerCase().endsWith('.xlsx')) {
+        // Parse CSV export from calendar apps
+        parsedEvents = parseCalendarCSV(text);
+      }
+
+      // Filter and process events that look like tutoring sessions
+      const processedEvents = parsedEvents.map((event, index) => {
+        const processed = {
+          ...event,
+          _rowIndex: index + 1,
+          errors: [] as string[]
+        };
+
+        // Try to extract client name from title
+        const titleMatch = event.title?.match(/(?:tutoring|session|lesson).*?(?:with|-)?\s*([a-zA-Z\s]+)/i);
+        if (titleMatch) {
+          processed.extractedClientName = titleMatch[1].trim();
+        } else {
+          processed.extractedClientName = event.title || '';
+        }
+
+        // Find matching client
+        const matchingClient = clients.find(c => 
+          c.name.toLowerCase().includes(processed.extractedClientName.toLowerCase()) ||
+          processed.extractedClientName.toLowerCase().includes(c.name.toLowerCase())
+        );
+        processed.client = matchingClient;
+        processed.clientId = matchingClient?.id;
+
+        // Validate
+        if (!event.date) processed.errors.push('Date is required');
+        if (!processed.extractedClientName) processed.errors.push('Could not extract client name from title');
+        if (!processed.client) processed.errors.push('Client not found - please add client first or adjust title');
+        if (!event.duration || event.duration <= 0) processed.errors.push('Valid duration required');
+
+        // Set defaults
+        processed.rate = matchingClient?.hourlyRate || 50;
+        processed.type = event.location?.toLowerCase().includes('virtual') || 
+                        event.location?.toLowerCase().includes('zoom') || 
+                        event.location?.toLowerCase().includes('online') ? 'virtual' : 'in-person';
+        processed.paid = false;
+        processed.notes = event.description || '';
+
+        return processed;
+      });
+
+      setCalendarData(processedEvents);
+      setCalendarPreview(processedEvents.slice(0, 10));
+      setShowCalendarImportModal(true);
+    };
+
+    reader.readAsText(file);
+  };
+
+  const parseICSFile = (icsContent: string) => {
+    const events: any[] = [];
+    const lines = icsContent.split('\n').map(line => line.trim());
+    
+    let currentEvent: any = null;
+    let inEvent = false;
+
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i];
+      
+      if (line === 'BEGIN:VEVENT') {
+        inEvent = true;
+        currentEvent = {};
+      } else if (line === 'END:VEVENT' && inEvent) {
+        if (currentEvent) {
+          // Calculate duration if we have start and end times
+          if (currentEvent.dtstart && currentEvent.dtend) {
+            const start = parseICSDate(currentEvent.dtstart);
+            const end = parseICSDate(currentEvent.dtend);
+            if (start && end) {
+              currentEvent.duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60); // hours
+              currentEvent.date = start.toISOString().split('T')[0];
+            }
+          }
+          events.push(currentEvent);
+        }
+        inEvent = false;
+        currentEvent = null;
+      } else if (inEvent && currentEvent) {
+        if (line.startsWith('SUMMARY:')) {
+          currentEvent.title = line.substring(8).replace(/\\n/g, ' ').replace(/\\,/g, ',');
+        } else if (line.startsWith('DTSTART')) {
+          currentEvent.dtstart = line.split(':')[1];
+        } else if (line.startsWith('DTEND')) {
+          currentEvent.dtend = line.split(':')[1];
+        } else if (line.startsWith('LOCATION:')) {
+          currentEvent.location = line.substring(9).replace(/\\n/g, ' ').replace(/\\,/g, ',');
+        } else if (line.startsWith('DESCRIPTION:')) {
+          currentEvent.description = line.substring(12).replace(/\\n/g, '\n').replace(/\\,/g, ',');
+        }
+      }
+    }
+
+    return events;
+  };
+
+  const parseICSDate = (icsDate: string) => {
+    if (!icsDate) return null;
+    
+    // Handle different ICS date formats
+    if (icsDate.includes('T')) {
+      // Format: 20240115T090000Z or 20240115T090000
+      const dateStr = icsDate.replace(/[TZ]/g, '');
+      const year = parseInt(dateStr.substring(0, 4));
+      const month = parseInt(dateStr.substring(4, 6)) - 1;
+      const day = parseInt(dateStr.substring(6, 8));
+      const hour = parseInt(dateStr.substring(8, 10)) || 0;
+      const minute = parseInt(dateStr.substring(10, 12)) || 0;
+      
+      return new Date(year, month, day, hour, minute);
+    } else {
+      // Format: 20240115
+      const year = parseInt(icsDate.substring(0, 4));
+      const month = parseInt(icsDate.substring(4, 6)) - 1;
+      const day = parseInt(icsDate.substring(6, 8));
+      
+      return new Date(year, month, day);
+    }
+  };
+
+  const parseCalendarCSV = (csvContent: string) => {
+    const lines = csvContent.split('\n').filter(line => line.trim());
+    if (lines.length < 2) return [];
+    
+    const headers = lines[0].split(',').map(h => h.trim().replace(/"/g, '').toLowerCase());
+    
+    return lines.slice(1).map(line => {
+      const values = line.split(',').map(v => v.trim().replace(/"/g, ''));
+      const event: any = {};
+      
+      headers.forEach((header, i) => {
+        const value = values[i] || '';
+        
+        if (header.includes('subject') || header.includes('title') || header.includes('summary')) {
+          event.title = value;
+        } else if (header.includes('start') && header.includes('date')) {
+          event.date = value;
+        } else if (header.includes('start') && header.includes('time')) {
+          event.startTime = value;
+        } else if (header.includes('end') && header.includes('time')) {
+          event.endTime = value;
+        } else if (header.includes('duration')) {
+          event.duration = parseFloat(value) || 1;
+        } else if (header.includes('location')) {
+          event.location = value;
+        } else if (header.includes('description') || header.includes('notes')) {
+          event.description = value;
+        }
+      });
+
+      // Calculate duration if we have start and end times but no duration
+      if (!event.duration && event.startTime && event.endTime) {
+        const start = new Date(`${event.date} ${event.startTime}`);
+        const end = new Date(`${event.date} ${event.endTime}`);
+        if (!isNaN(start.getTime()) && !isNaN(end.getTime())) {
+          event.duration = (end.getTime() - start.getTime()) / (1000 * 60 * 60);
+        }
+      }
+
+      // Default duration if still not set
+      if (!event.duration) {
+        event.duration = 1;
+      }
+
+      return event;
+    });
+  };
+
+  const importCalendarSessions = () => {
+    const validRows = calendarData.filter(row => row.errors.length === 0);
+    
+    const newSessions: Session[] = validRows.map(row => {
+      const client = row.client;
+      const duration = row.duration;
+      const rate = row.rate;
+      const mileage = row.type === 'in-person' ? (client?.distanceFromHome || 0) * 2 : 0;
+      
+      return {
+        id: Date.now().toString() + Math.random().toString(36).substr(2, 9),
+        clientId: row.clientId,
+        date: row.date,
+        duration,
+        rate,
+        type: row.type,
+        mileage,
+        totalEarned: duration * rate,
+        paid: row.paid || false,
+        paidDate: row.paid ? new Date().toISOString().split('T')[0] : undefined,
+        notes: row.notes || ''
+      };
+    });
+    
+    setSessions([...sessions, ...newSessions]);
+    setShowCalendarImportModal(false);
+    setCalendarData([]);
+    setCalendarPreview([]);
+    
+    alert(`Successfully imported ${newSessions.length} sessions from calendar!`);
+  };
+
   const importSessions = () => {
     const validRows = csvData.filter(row => row.errors.length === 0);
     
@@ -303,6 +522,16 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
             <Download className="h-5 w-5" />
             <span>Download Template</span>
           </button>
+          <label className="flex items-center space-x-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors cursor-pointer">
+            <Calendar className="h-5 w-5" />
+            <span>Import Calendar</span>
+            <input
+              type="file"
+              accept=".ics,.csv,.xlsx"
+              onChange={handleCalendarFileUpload}
+              className="hidden"
+            />
+          </label>
           <button
             onClick={exportToCalendar}
             disabled={sessions.length === 0}
@@ -529,6 +758,122 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
                   setShowImportModal(false);
                   setCsvData([]);
                   setCsvPreview([]);
+                }}
+                className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Calendar Import Modal */}
+      {showCalendarImportModal && (
+        <div className="fixed inset-0 bg-gray-600 bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-6xl mx-4 max-h-[90vh] overflow-y-auto">
+            <h2 className="text-xl font-semibold text-gray-900 mb-4">Import Sessions from Calendar</h2>
+            
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-medium text-blue-900 mb-2">Supported Formats</h3>
+              <ul className="text-sm text-blue-700 space-y-1">
+                <li>• <strong>ICS files:</strong> From Google Calendar, Outlook, Apple Calendar (File → Export)</li>
+                <li>• <strong>CSV files:</strong> Calendar exports with columns like Subject, Start Date, Start Time, End Time</li>
+                <li>• <strong>Excel files:</strong> Saved as CSV from calendar applications</li>
+              </ul>
+            </div>
+            
+            <div className="mb-4">
+              <p className="text-sm text-gray-600 mb-2">
+                Preview of detected sessions ({calendarData.length} events total, showing first 10):
+              </p>
+              
+              <div className="overflow-x-auto border border-gray-200 rounded-lg">
+                <table className="min-w-full divide-y divide-gray-200">
+                  <thead className="bg-gray-50">
+                    <tr>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Event</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Date</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Extracted Client</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Matched Client</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Duration</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Rate</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Type</th>
+                      <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Status</th>
+                    </tr>
+                  </thead>
+                  <tbody className="bg-white divide-y divide-gray-200">
+                    {calendarPreview.map((event, index) => (
+                      <tr key={index} className={event.errors.length > 0 ? 'bg-red-50' : ''}>
+                        <td className="px-3 py-2 text-sm text-gray-900 max-w-xs truncate" title={event.title}>
+                          {event.title}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{event.date}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{event.extractedClientName}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">
+                          {event.client ? (
+                            <span className="text-green-600">{event.client.name} ✓</span>
+                          ) : (
+                            <span className="text-red-600">Not found ❌</span>
+                          )}
+                        </td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{event.duration}h</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">${event.rate}</td>
+                        <td className="px-3 py-2 text-sm text-gray-900">{event.type}</td>
+                        <td className="px-3 py-2 text-sm">
+                          {event.errors.length === 0 ? (
+                            <span className="text-green-600">✓ Valid</span>
+                          ) : (
+                            <div className="text-red-600">
+                              <div>❌ Errors:</div>
+                              <ul className="text-xs mt-1">
+                                {event.errors.map((error: string, i: number) => (
+                                  <li key={i}>• {error}</li>
+                                ))}
+                              </ul>
+                            </div>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+            
+            <div className="mb-4 p-4 bg-amber-50 rounded-lg">
+              <h3 className="font-medium text-amber-900 mb-2">Import Tips</h3>
+              <ul className="text-sm text-amber-700 space-y-1">
+                <li>• Event titles should contain "tutoring", "session", or "lesson" for best detection</li>
+                <li>• Client names should match existing clients in your system</li>
+                <li>• Virtual sessions are detected by location keywords like "Zoom", "Virtual", "Online"</li>
+                <li>• Rates default to client's hourly rate or $50 if not found</li>
+                <li>• All imported sessions are marked as unpaid initially</li>
+              </ul>
+            </div>
+            
+            <div className="mb-4 p-4 bg-blue-50 rounded-lg">
+              <h3 className="font-medium text-blue-900 mb-2">Import Summary</h3>
+              <div className="text-sm text-blue-700">
+                <div>Total events: {calendarData.length}</div>
+                <div>Valid sessions: {calendarData.filter(event => event.errors.length === 0).length}</div>
+                <div>Events with errors: {calendarData.filter(event => event.errors.length > 0).length}</div>
+              </div>
+            </div>
+            
+            <div className="flex space-x-3">
+              <button
+                onClick={importCalendarSessions}
+                disabled={calendarData.filter(event => event.errors.length === 0).length === 0}
+                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+              >
+                Import {calendarData.filter(event => event.errors.length === 0).length} Valid Sessions
+              </button>
+              <button
+                onClick={() => {
+                  setShowCalendarImportModal(false);
+                  setCalendarData([]);
+                  setCalendarPreview([]);
                 }}
                 className="px-4 py-2 bg-gray-300 text-gray-700 rounded-lg hover:bg-gray-400 transition-colors"
               >
