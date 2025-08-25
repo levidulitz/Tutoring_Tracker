@@ -1,10 +1,14 @@
 import React, { useState, useEffect } from 'react';
-import { Calendar, DollarSign, Users, FileText, Home, Car, Phone, Zap } from 'lucide-react';
+import { Calendar, DollarSign, Users, FileText, Home, Car, Phone, Zap, Settings, LogOut } from 'lucide-react';
+import { useAuth } from './hooks/useAuth';
+import Auth from './components/Auth';
+import AdminPanel from './components/AdminPanel';
 import Dashboard from './components/Dashboard';
 import ClientManagement from './components/ClientManagement';
 import SessionTracking from './components/SessionTracking';
 import ExpenseTracking from './components/ExpenseTracking';
 import Reports from './components/Reports';
+import { supabase } from './lib/supabase';
 
 export interface Client {
   id: string;
@@ -43,34 +47,84 @@ export interface Expense {
 }
 
 function App() {
+  const { user, profile, loading, signOut, isAdmin } = useAuth();
   const [activeTab, setActiveTab] = useState('dashboard');
   const [clients, setClients] = useState<Client[]>([]);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
-  // Load data from localStorage on component mount
+  // Load data from Supabase when user is authenticated
   useEffect(() => {
-    const savedClients = localStorage.getItem('tutorTracker_clients');
-    const savedSessions = localStorage.getItem('tutorTracker_sessions');
-    const savedExpenses = localStorage.getItem('tutorTracker_expenses');
+    if (user && profile) {
+      loadUserData();
+    }
+  }, [user, profile]);
 
-    if (savedClients) setClients(JSON.parse(savedClients));
-    if (savedSessions) setSessions(JSON.parse(savedSessions));
-    if (savedExpenses) setExpenses(JSON.parse(savedExpenses));
-  }, []);
+  const loadUserData = async () => {
+    try {
+      // Load clients
+      const { data: clientsData } = await supabase
+        .from('clients')
+        .select('*')
+        .eq('user_id', user!.id);
+      
+      if (clientsData) {
+        setClients(clientsData.map(c => ({
+          id: c.id,
+          name: c.name,
+          email: c.email || '',
+          phone: c.phone || '',
+          address: c.address || '',
+          hourlyRate: c.hourly_rate,
+          distanceFromHome: c.distance_from_home,
+          notes: c.notes || ''
+        })));
+      }
 
-  // Save data to localStorage whenever data changes
-  useEffect(() => {
-    localStorage.setItem('tutorTracker_clients', JSON.stringify(clients));
-  }, [clients]);
+      // Load sessions
+      const { data: sessionsData } = await supabase
+        .from('sessions')
+        .select('*')
+        .eq('user_id', user!.id);
+      
+      if (sessionsData) {
+        setSessions(sessionsData.map(s => ({
+          id: s.id,
+          clientId: s.client_id,
+          date: s.date,
+          duration: s.duration,
+          rate: s.rate,
+          type: s.type as 'virtual' | 'in-person',
+          mileage: s.mileage || 0,
+          totalEarned: s.total_earned,
+          paid: s.paid,
+          paidDate: s.paid_date || undefined,
+          notes: s.notes || ''
+        })));
+      }
 
-  useEffect(() => {
-    localStorage.setItem('tutorTracker_sessions', JSON.stringify(sessions));
-  }, [sessions]);
-
-  useEffect(() => {
-    localStorage.setItem('tutorTracker_expenses', JSON.stringify(expenses));
-  }, [expenses]);
+      // Load expenses
+      const { data: expensesData } = await supabase
+        .from('expenses')
+        .select('*')
+        .eq('user_id', user!.id);
+      
+      if (expensesData) {
+        setExpenses(expensesData.map(e => ({
+          id: e.id,
+          date: e.date,
+          category: e.category as Expense['category'],
+          description: e.description,
+          amount: e.amount,
+          deductible: e.deductible,
+          receiptsAttached: e.receipts_attached,
+          notes: e.notes || ''
+        })));
+      }
+    } catch (error) {
+      console.error('Error loading user data:', error);
+    }
+  };
 
   const tabs = [
     { id: 'dashboard', name: 'Dashboard', icon: Home },
@@ -78,6 +132,7 @@ function App() {
     { id: 'sessions', name: 'Sessions', icon: Calendar },
     { id: 'expenses', name: 'Expenses', icon: DollarSign },
     { id: 'reports', name: 'Tax Reports', icon: FileText },
+    ...(isAdmin ? [{ id: 'admin', name: 'Admin', icon: Settings }] : []),
   ];
 
   const renderActiveTab = () => {
@@ -96,10 +151,45 @@ function App() {
         return <ExpenseTracking expenses={expenses} setExpenses={setExpenses} />;
       case 'reports':
         return <Reports clients={clients} sessions={sessions} expenses={expenses} />;
+      case 'admin':
+        return isAdmin ? <AdminPanel currentUser={profile} /> : <Dashboard clients={clients} sessions={sessions} expenses={expenses} />;
       default:
         return <Dashboard clients={clients} sessions={sessions} expenses={expenses} />;
     }
   };
+
+  // Show loading spinner while checking authentication
+  if (loading) {
+    return (
+      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+          <div className="flex items-center space-x-4">
+            <span className="text-sm text-gray-600">
+              Welcome, {profile.full_name || profile.email}
+            </span>
+            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+              profile.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
+              profile.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+              'bg-gray-100 text-gray-800'
+            }`}>
+              {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
+            </span>
+            <button
+              onClick={signOut}
+              className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+            >
+              <LogOut className="h-4 w-4" />
+              <span>Sign Out</span>
+            </button>
+          </div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+      </div>
+    );
+  }
+
+  // Show auth form if not authenticated
+  if (!user || !profile) {
+    return <Auth onAuthSuccess={() => {}} />;
+  }
 
   return (
     <div className="min-h-screen bg-gray-50">
