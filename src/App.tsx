@@ -162,25 +162,6 @@ function App() {
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-          <div className="flex items-center space-x-4">
-            <span className="text-sm text-gray-600">
-              Welcome, {profile.full_name || profile.email}
-            </span>
-            <span className={`px-2 py-1 rounded-full text-xs font-medium ${
-              profile.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
-              profile.role === 'admin' ? 'bg-blue-100 text-blue-800' :
-              'bg-gray-100 text-gray-800'
-            }`}>
-              {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
-            </span>
-            <button
-              onClick={signOut}
-              className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
-            >
-              <LogOut className="h-4 w-4" />
-              <span>Sign Out</span>
-            </button>
-          </div>
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
       </div>
     );
@@ -205,6 +186,25 @@ function App() {
                 <h1 className="text-2xl font-bold text-gray-900">TutorTracker</h1>
               </div>
               <span className="ml-3 text-sm text-gray-500">Tax Management System</span>
+            </div>
+            <div className="flex items-center space-x-4">
+              <span className="text-sm text-gray-600">
+                Welcome, {profile.full_name || profile.email}
+              </span>
+              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                profile.role === 'owner' ? 'bg-yellow-100 text-yellow-800' :
+                profile.role === 'admin' ? 'bg-blue-100 text-blue-800' :
+                'bg-gray-100 text-gray-800'
+              }`}>
+                {profile.role.charAt(0).toUpperCase() + profile.role.slice(1)}
+              </span>
+              <button
+                onClick={signOut}
+                className="flex items-center space-x-1 px-3 py-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              >
+                <LogOut className="h-4 w-4" />
+                <span>Sign Out</span>
+              </button>
             </div>
           </div>
         </div>
