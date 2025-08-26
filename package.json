@@ -6,6 +6,14 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
+    "build:mobile": "vite build && npx cap sync",
+    "android": "npx cap run android",
+    "ios": "npx cap run ios",
+    "sync": "npx cap sync",
+    "add:android": "npx cap add android",
+    "add:ios": "npx cap add ios",
+    "open:android": "npx cap open android",
+    "open:ios": "npx cap open ios",
     "lint": "eslint .",
     "preview": "vite preview"
   },
