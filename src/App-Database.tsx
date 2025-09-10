@@ -188,6 +188,10 @@ function App() {
               <span className="ml-3 text-sm text-gray-500">Professional Edition</span>
             </div>
             <div className="flex items-center space-x-4">
+              <div className="flex items-center space-x-2">
+                <div className="w-2 h-2 bg-green-500 rounded-full animate-pulse"></div>
+                <span className="text-xs text-gray-500">Synced</span>
+              </div>
               <span className="text-sm text-gray-600">
                 Welcome, {profile.full_name || profile.email}
               </span>

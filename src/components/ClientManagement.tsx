@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Mail, Phone, MapPin } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { Client } from '../App';
 
 interface ClientManagementProps {
@@ -8,6 +10,7 @@ interface ClientManagementProps {
 }
 
 const ClientManagement: React.FC<ClientManagementProps> = ({ clients, setClients }) => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingClient, setEditingClient] = useState<Client | null>(null);
   const [formData, setFormData] = useState({
@@ -37,26 +40,71 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ clients, setClients
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const clientData: Client = {
+    const clientData = {
       id: editingClient?.id || Date.now().toString(),
+      user_id: user?.id,
       name: formData.name,
       email: formData.email,
       phone: formData.phone,
       address: formData.address,
-      hourlyRate: parseFloat(formData.hourlyRate),
-      distanceFromHome: parseFloat(formData.distanceFromHome),
+      hourly_rate: parseFloat(formData.hourlyRate),
+      distance_from_home: parseFloat(formData.distanceFromHome),
       notes: formData.notes
     };
 
-    if (editingClient) {
-      setClients(clients.map(client => 
-        client.id === editingClient.id ? clientData : client
-      ));
-    } else {
-      setClients([...clients, clientData]);
-    }
+    saveClient(clientData);
+  };
 
-    resetForm();
+  const saveClient = async (clientData: any) => {
+    try {
+      if (editingClient) {
+        const { error } = await supabase
+          .from('clients')
+          .update(clientData)
+          .eq('id', editingClient.id);
+        
+        if (error) throw error;
+        
+        setClients(clients.map(client => 
+          client.id === editingClient.id ? {
+            id: clientData.id,
+            name: clientData.name,
+            email: clientData.email || '',
+            phone: clientData.phone || '',
+            address: clientData.address || '',
+            hourlyRate: clientData.hourly_rate,
+            distanceFromHome: clientData.distance_from_home,
+            notes: clientData.notes || ''
+          } : client
+        ));
+      } else {
+        const { data, error } = await supabase
+          .from('clients')
+          .insert(clientData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        const newClient: Client = {
+          id: data.id,
+          name: data.name,
+          email: data.email || '',
+          phone: data.phone || '',
+          address: data.address || '',
+          hourlyRate: data.hourly_rate,
+          distanceFromHome: data.distance_from_home,
+          notes: data.notes || ''
+        };
+        
+        setClients([...clients, newClient]);
+      }
+      
+      resetForm();
+    } catch (error) {
+      console.error('Error saving client:', error);
+      alert('Failed to save client. Please try again.');
+    }
   };
 
   const handleEdit = (client: Client) => {
@@ -73,9 +121,21 @@ const ClientManagement: React.FC<ClientManagementProps> = ({ clients, setClients
     setShowForm(true);
   };
 
-  const handleDelete = (clientId: string) => {
+  const handleDelete = async (clientId: string) => {
     if (confirm('Are you sure you want to delete this client? This action cannot be undone.')) {
-      setClients(clients.filter(client => client.id !== clientId));
+      try {
+        const { error } = await supabase
+          .from('clients')
+          .delete()
+          .eq('id', clientId);
+        
+        if (error) throw error;
+        
+        setClients(clients.filter(client => client.id !== clientId));
+      } catch (error) {
+        console.error('Error deleting client:', error);
+        alert('Failed to delete client. Please try again.');
+      }
     }
   };
 

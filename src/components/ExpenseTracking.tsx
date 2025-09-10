@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Receipt, Home, Phone, Zap, Car, BookOpen } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { Expense } from '../App';
 
 interface ExpenseTrackingProps {
@@ -8,6 +10,7 @@ interface ExpenseTrackingProps {
 }
 
 const ExpenseTracking: React.FC<ExpenseTrackingProps> = ({ expenses, setExpenses }) => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null);
   const [formData, setFormData] = useState({
@@ -49,26 +52,71 @@ const ExpenseTracking: React.FC<ExpenseTrackingProps> = ({ expenses, setExpenses
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     
-    const expenseData: Expense = {
+    const expenseData = {
       id: editingExpense?.id || Date.now().toString(),
+      user_id: user?.id,
       date: formData.date,
       category: formData.category,
       description: formData.description,
       amount: parseFloat(formData.amount),
       deductible: formData.deductible,
-      receiptsAttached: formData.receiptsAttached,
+      receipts_attached: formData.receiptsAttached,
       notes: formData.notes
     };
 
-    if (editingExpense) {
-      setExpenses(expenses.map(expense => 
-        expense.id === editingExpense.id ? expenseData : expense
-      ));
-    } else {
-      setExpenses([...expenses, expenseData]);
-    }
+    saveExpense(expenseData);
+  };
 
-    resetForm();
+  const saveExpense = async (expenseData: any) => {
+    try {
+      if (editingExpense) {
+        const { error } = await supabase
+          .from('expenses')
+          .update(expenseData)
+          .eq('id', editingExpense.id);
+        
+        if (error) throw error;
+        
+        setExpenses(expenses.map(expense => 
+          expense.id === editingExpense.id ? {
+            id: expenseData.id,
+            date: expenseData.date,
+            category: expenseData.category,
+            description: expenseData.description,
+            amount: expenseData.amount,
+            deductible: expenseData.deductible,
+            receiptsAttached: expenseData.receipts_attached,
+            notes: expenseData.notes || ''
+          } : expense
+        ));
+      } else {
+        const { data, error } = await supabase
+          .from('expenses')
+          .insert(expenseData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        const newExpense: Expense = {
+          id: data.id,
+          date: data.date,
+          category: data.category,
+          description: data.description,
+          amount: data.amount,
+          deductible: data.deductible,
+          receiptsAttached: data.receipts_attached,
+          notes: data.notes || ''
+        };
+        
+        setExpenses([...expenses, newExpense]);
+      }
+      
+      resetForm();
+    } catch (error) {
+      console.error('Error saving expense:', error);
+      alert('Failed to save expense. Please try again.');
+    }
   };
 
   const handleEdit = (expense: Expense) => {
@@ -85,9 +133,21 @@ const ExpenseTracking: React.FC<ExpenseTrackingProps> = ({ expenses, setExpenses
     setShowForm(true);
   };
 
-  const handleDelete = (expenseId: string) => {
+  const handleDelete = async (expenseId: string) => {
     if (confirm('Are you sure you want to delete this expense?')) {
-      setExpenses(expenses.filter(expense => expense.id !== expenseId));
+      try {
+        const { error } = await supabase
+          .from('expenses')
+          .delete()
+          .eq('id', expenseId);
+        
+        if (error) throw error;
+        
+        setExpenses(expenses.filter(expense => expense.id !== expenseId));
+      } catch (error) {
+        console.error('Error deleting expense:', error);
+        alert('Failed to delete expense. Please try again.');
+      }
     }
   };
 

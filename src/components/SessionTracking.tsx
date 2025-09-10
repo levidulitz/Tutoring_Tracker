@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Plus, Edit2, Trash2, Video, Car, Check, X, Calendar, Download, Upload, CalendarDays } from 'lucide-react';
+import { supabase } from '../lib/supabase';
+import { useAuth } from '../hooks/useAuth';
 import { Client, Session } from '../App';
 
 interface SessionTrackingProps {
@@ -9,6 +11,7 @@ interface SessionTrackingProps {
 }
 
 const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, setSessions }) => {
+  const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [showCalendarImportModal, setShowCalendarImportModal] = useState(false);
@@ -439,28 +442,79 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
     const rate = parseFloat(formData.rate);
     const mileage = formData.type === 'in-person' ? client.distanceFromHome * 2 : 0; // Round trip
 
-    const sessionData: Session = {
+    const sessionData = {
       id: editingSession?.id || Date.now().toString(),
-      clientId: formData.clientId,
+      user_id: user?.id,
+      client_id: formData.clientId,
       date: formData.date,
       duration,
       rate,
       type: formData.type,
       mileage,
-      totalEarned: duration * rate,
+      total_earned: duration * rate,
       paid: false,
       notes: formData.notes
     };
 
-    if (editingSession) {
-      setSessions(sessions.map(session => 
-        session.id === editingSession.id ? sessionData : session
-      ));
-    } else {
-      setSessions([...sessions, sessionData]);
-    }
+    saveSession(sessionData);
+  };
 
-    resetForm();
+  const saveSession = async (sessionData: any) => {
+    try {
+      if (editingSession) {
+        const { error } = await supabase
+          .from('sessions')
+          .update(sessionData)
+          .eq('id', editingSession.id);
+        
+        if (error) throw error;
+        
+        setSessions(sessions.map(session => 
+          session.id === editingSession.id ? {
+            id: sessionData.id,
+            clientId: sessionData.client_id,
+            date: sessionData.date,
+            duration: sessionData.duration,
+            rate: sessionData.rate,
+            type: sessionData.type,
+            mileage: sessionData.mileage || 0,
+            totalEarned: sessionData.total_earned,
+            paid: sessionData.paid,
+            paidDate: sessionData.paid_date || undefined,
+            notes: sessionData.notes || ''
+          } : session
+        ));
+      } else {
+        const { data, error } = await supabase
+          .from('sessions')
+          .insert(sessionData)
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        const newSession: Session = {
+          id: data.id,
+          clientId: data.client_id,
+          date: data.date,
+          duration: data.duration,
+          rate: data.rate,
+          type: data.type,
+          mileage: data.mileage || 0,
+          totalEarned: data.total_earned,
+          paid: data.paid,
+          paidDate: data.paid_date || undefined,
+          notes: data.notes || ''
+        };
+        
+        setSessions([...sessions, newSession]);
+      }
+      
+      resetForm();
+    } catch (error) {
+      console.error('Error saving session:', error);
+      alert('Failed to save session. Please try again.');
+    }
   };
 
   const handleEdit = (session: Session) => {
@@ -476,22 +530,55 @@ const SessionTracking: React.FC<SessionTrackingProps> = ({ clients, sessions, se
     setShowForm(true);
   };
 
-  const handleDelete = (sessionId: string) => {
+  const handleDelete = async (sessionId: string) => {
     if (confirm('Are you sure you want to delete this session?')) {
-      setSessions(sessions.filter(session => session.id !== sessionId));
+      try {
+        const { error } = await supabase
+          .from('sessions')
+          .delete()
+          .eq('id', sessionId);
+        
+        if (error) throw error;
+        
+        setSessions(sessions.filter(session => session.id !== sessionId));
+      } catch (error) {
+        console.error('Error deleting session:', error);
+        alert('Failed to delete session. Please try again.');
+      }
     }
   };
 
-  const togglePaymentStatus = (sessionId: string) => {
-    setSessions(sessions.map(session => 
-      session.id === sessionId 
-        ? { 
-            ...session, 
-            paid: !session.paid,
-            paidDate: !session.paid ? new Date().toISOString().split('T')[0] : undefined
-          } 
-        : session
-    ));
+  const togglePaymentStatus = async (sessionId: string) => {
+    const session = sessions.find(s => s.id === sessionId);
+    if (!session) return;
+    
+    const newPaidStatus = !session.paid;
+    const paidDate = newPaidStatus ? new Date().toISOString().split('T')[0] : null;
+    
+    try {
+      const { error } = await supabase
+        .from('sessions')
+        .update({ 
+          paid: newPaidStatus,
+          paid_date: paidDate
+        })
+        .eq('id', sessionId);
+      
+      if (error) throw error;
+      
+      setSessions(sessions.map(s => 
+        s.id === sessionId 
+          ? { 
+              ...s, 
+              paid: newPaidStatus,
+              paidDate: paidDate || undefined
+            } 
+          : s
+      ));
+    } catch (error) {
+      console.error('Error updating payment status:', error);
+      alert('Failed to update payment status. Please try again.');
+    }
   };
 
   const handleClientChange = (clientId: string) => {

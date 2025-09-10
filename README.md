@@ -1,55 +1,19 @@
 # TutorTracker - Tax Management System
 
-A comprehensive tax tracking application for self-employed tutors with two deployment options.
+A comprehensive tax tracking application for self-employed tutors.
 
-## 🚀 Two Versions Available
+## 🚀 Current Version: Professional Edition
 
-### 1. **Simple Version (Current)** - Personal Edition
-- **Local Storage**: All data stored in browser
-- **No Authentication**: Single-user application
-- **No Database Required**: Works offline
-- **Quick Setup**: Ready to use immediately
-
-### 2. **Database Version** - Professional Edition
-- **Multi-User Support**: Authentication system
-- **Cloud Database**: Supabase integration
-- **Role-Based Access**: User, Admin, Owner roles
-- **Data Persistence**: Secure cloud storage
-
-## 🔄 Switching Between Versions
-
-### To Use Simple Version (Default):
-```bash
-# Already configured - no changes needed
-npm run dev
-```
-
-### To Use Database Version:
-1. **Update main.tsx:**
-   ```typescript
-   // Change this line in src/main.tsx:
-   import App from './App-Simple.tsx';
-   // To this:
-   import App from './App-Database.tsx';
-   ```
-
-2. **Set up Supabase:**
-   - Create account at [supabase.com](https://supabase.com)
-   - Create new project
-   - Copy project URL and anon key
-   - Create `.env` file with your credentials:
-     ```
-     VITE_SUPABASE_URL=your_project_url
-     VITE_SUPABASE_ANON_KEY=your_anon_key
-     ```
-
-3. **Run database migration:**
-   - Go to Supabase SQL Editor
-   - Run the SQL from `supabase/migrations/20250825125255_round_snow.sql`
+**Current Setup**: Multi-user authentication with cloud database sync
+- **Cross-Platform Sync**: Access your data from web, mobile app, or any device
+- **User Authentication**: Secure login system
+- **Cloud Database**: Supabase integration for data persistence
+- **Role-Based Access**: User, Admin, Owner permissions
+- **Real-time Sync**: Changes sync instantly across all your devices
 
 ## ✨ Features
 
-### Core Features (Both Versions)
+### Core Features
 - **Client Management**: Store client information and rates
 - **Session Tracking**: Log tutoring sessions with payment status
 - **Expense Tracking**: Categorize business expenses for tax deductions
@@ -58,11 +22,10 @@ npm run dev
 - **CSV Import/Export**: Bulk data management
 - **Mileage Tracking**: Automatic calculation for in-person sessions
 
-### Professional Edition Additional Features
-- **Multi-User Support**: Unlimited user accounts
+### Professional Features
+- **Cross-Device Access**: Same data on web, mobile, and desktop
 - **Role Management**: User, Admin, Owner permissions
 - **Admin Dashboard**: User management and statistics
-- **Cloud Sync**: Data accessible from any device
 - **Data Security**: Enterprise-grade security with Supabase
 
 ## 🛠️ Installation
@@ -73,6 +36,14 @@ git clone <repository-url>
 
 # Install dependencies
 npm install
+
+# Set up environment variables
+# Copy .env.example to .env and add your Supabase credentials
+cp .env.example .env
+
+# Get credentials from https://supabase.com
+# VITE_SUPABASE_URL=your_project_url
+# VITE_SUPABASE_ANON_KEY=your_anon_key
 
 # Start development server
 npm run dev
@@ -95,23 +66,31 @@ npm run dev
 - **Apple Calendar**: Export calendar
 - **CSV Exports**: From various calendar applications
 
-## 🔒 Security (Professional Edition)
+## 📱 Mobile Apps
+
+Build native mobile apps for Android and iOS:
+
+```bash
+# Build mobile-ready version
+npm run build:mobile
+
+# Add platforms
+npm run add:android  # For Android
+npm run add:ios      # For iOS (macOS only)
+```
+
+## 🔒 Security
 
 - **Row Level Security**: Database-level data isolation
 - **Authentication**: Secure email/password login
 - **Role-Based Access**: Granular permission system
 - **Data Encryption**: All data encrypted in transit and at rest
 
-## 📈 Deployment
-
-### Simple Version
-- Deploy to any static hosting (Netlify, Vercel, etc.)
-- No backend configuration required
-
-### Professional Edition
-- Requires Supabase project setup
-- Deploy frontend to static hosting
-- Database automatically managed by Supabase
+## 🌐 Access Anywhere
+Your data syncs across all platforms:
+- **Web App**: Access from any browser
+- **Mobile Apps**: Native Android and iOS apps
+- **Desktop**: Progressive Web App (PWA) support
 
 ## 🆘 Support
 
