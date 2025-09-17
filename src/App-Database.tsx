@@ -53,21 +53,34 @@ function App() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
 
+  console.log('=== APP RENDER ===');
+  console.log('Auth state:', { 
+    hasUser: !!user, 
+    hasProfile: !!profile, 
+    loading, 
+    error,
+    userEmail: user?.email 
+  });
+
   // Load data from Supabase when user is authenticated
   useEffect(() => {
     if (user && profile) {
+      console.log('Loading user data...');
       loadUserData();
     }
   }, [user, profile]);
 
   const loadUserData = async () => {
+    console.log('=== LOADING USER DATA ===');
     try {
       // Load clients
+      console.log('Loading clients...');
       const { data: clientsData } = await supabase
         .from('clients')
         .select('*')
         .eq('user_id', user!.id);
       
+      console.log('Clients loaded:', clientsData?.length || 0);
       if (clientsData) {
         setClients(clientsData.map(c => ({
           id: c.id,
@@ -82,11 +95,13 @@ function App() {
       }
 
       // Load sessions
+      console.log('Loading sessions...');
       const { data: sessionsData } = await supabase
         .from('sessions')
         .select('*')
         .eq('user_id', user!.id);
       
+      console.log('Sessions loaded:', sessionsData?.length || 0);
       if (sessionsData) {
         setSessions(sessionsData.map(s => ({
           id: s.id,
@@ -104,11 +119,13 @@ function App() {
       }
 
       // Load expenses
+      console.log('Loading expenses...');
       const { data: expensesData } = await supabase
         .from('expenses')
         .select('*')
         .eq('user_id', user!.id);
       
+      console.log('Expenses loaded:', expensesData?.length || 0);
       if (expensesData) {
         setExpenses(expensesData.map(e => ({
           id: e.id,
@@ -121,6 +138,7 @@ function App() {
           notes: e.notes || ''
         })));
       }
+      console.log('=== USER DATA LOADING COMPLETE ===');
     } catch (error) {
       console.error('Error loading user data:', error);
     }

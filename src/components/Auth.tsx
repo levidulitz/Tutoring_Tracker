@@ -16,11 +16,15 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
 
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
+    console.log('=== AUTH FORM SUBMISSION ===');
+    console.log('Is signup:', isSignUp);
+    console.log('Email:', email);
     setLoading(true);
     setError(null);
 
     try {
       if (isSignUp) {
+        console.log('Attempting signup...');
         const { data, error } = await supabase.auth.signUp({
           email,
           password,
@@ -31,9 +35,12 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
           }
         });
 
+        console.log('Signup result:', { user: !!data.user, error: error?.message });
+
         if (error) throw error;
 
         if (data.user) {
+          console.log('Creating profile for user:', data.user.id);
           // Create profile
           const { error: profileError } = await supabase
             .from('profiles')
@@ -44,21 +51,25 @@ const Auth: React.FC<AuthProps> = ({ onAuthSuccess }) => {
               role: 'user'
             });
 
+          console.log('Profile creation result:', { error: profileError?.message });
           if (profileError) throw profileError;
         }
 
         alert('Account created successfully! You can now sign in.');
         setIsSignUp(false);
       } else {
+        console.log('Attempting signin...');
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
         });
 
+        console.log('Signin result:', { error: error?.message });
         if (error) throw error;
         onAuthSuccess();
       }
     } catch (error: any) {
+      console.error('Auth error:', error);
       setError(error.message);
     } finally {
       setLoading(false);
