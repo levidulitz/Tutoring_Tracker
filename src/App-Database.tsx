@@ -182,10 +182,17 @@ function App() {
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto mb-4"></div>
-          <p className="text-gray-600">Connecting to database...</p>
+          <p className="text-gray-600">Initializing application...</p>
+          <p className="text-sm text-gray-500 mt-2">Setting up your secure connection</p>
           {error && (
             <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg max-w-md">
               <p className="text-red-800 text-sm">{error}</p>
+              <details className="mt-2">
+                <summary className="text-red-700 cursor-pointer text-sm">Show technical details</summary>
+                <div className="mt-2 text-xs text-red-600 font-mono bg-red-100 p-2 rounded">
+                  Check browser console for detailed logs
+                </div>
+              </details>
               <button 
                 onClick={() => window.location.reload()} 
                 className="mt-2 px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700 text-sm"

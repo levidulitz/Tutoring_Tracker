@@ -1,18 +1,19 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ghwzpfdmwurlxhppatlp.supabase.co'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdod3pwZmRtd3VybHhocHBhdGxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxMjU1NzQsImV4cCI6MjA3MTcwMTU3NH0.rgzSctJnm5YZQUWuLSJQVJIWA6CubPpfHGss6g5Hm6U'
 
 console.log('=== SUPABASE CONNECTION DEBUG ===');
 console.log('Environment variables:');
 console.log('VITE_SUPABASE_URL:', supabaseUrl);
 console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'Missing');
-console.log('All env vars:', import.meta.env);
 
 if (!supabaseUrl || !supabaseAnonKey) {
   console.error('Missing Supabase environment variables');
   console.log('VITE_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
   console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing');
+} else {
+  console.log('✅ Supabase credentials found');
 }
 
 console.log('Creating Supabase client...');
@@ -20,6 +21,7 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
     autoRefreshToken: true,
+    detectSessionInUrl: true
   },
   global: {
     headers: {
@@ -28,24 +30,6 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
-// Test connection immediately
-console.log('Testing Supabase connection...');
-supabase.auth.getSession()
-  .then(({ data, error }) => {
-    console.log('Initial session check:', { data: data?.session ? 'Session exists' : 'No session', error });
-  })
-  .catch((err) => {
-    console.error('Failed to get initial session:', err);
-  });
-
-// Test database connection
-supabase.from('profiles').select('count', { count: 'exact', head: true })
-  .then(({ count, error }) => {
-    console.log('Database connection test:', { count, error });
-  })
-  .catch((err) => {
-    console.error('Database connection failed:', err);
-  });
 
 export type Database = {
   public: {

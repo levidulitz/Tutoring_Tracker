@@ -21,10 +21,11 @@ export const useAuth = () => {
     console.log('=== AUTH HOOK INITIALIZING ===');
     let mounted = true;
     
-    // Get initial session
-    console.log('Getting initial session...');
-    supabase.auth.getSession()
-      .then(({ data: { session }, error }) => {
+    const initializeAuth = async () => {
+      try {
+        console.log('Getting initial session...');
+        const { data: { session }, error } = await supabase.auth.getSession();
+        
         console.log('Initial session result:', { 
           hasSession: !!session, 
           userId: session?.user?.id,
@@ -35,7 +36,7 @@ export const useAuth = () => {
         
         if (error) {
           console.error('Auth session error:', error);
-          setError('Failed to connect to authentication service');
+          setError(`Authentication error: ${error.message}`);
           setLoading(false);
           return;
         }
@@ -43,18 +44,20 @@ export const useAuth = () => {
         setUser(session?.user ?? null);
         if (session?.user) {
           console.log('User found, fetching profile...');
-          fetchProfile(session.user.id);
+          await fetchProfile(session.user.id);
         } else {
           console.log('No user session, setting loading to false');
           setLoading(false);
         }
-      })
-      .catch((err) => {
-        console.error('Auth connection error details:', err);
+      } catch (err: any) {
+        console.error('Auth initialization error:', err);
         if (!mounted) return;
-        setError('Unable to connect to database. Please check your internet connection.');
+        setError(`Connection failed: ${err.message || 'Unknown error'}`);
         setLoading(false);
-      });
+      }
+    };
+
+    initializeAuth();
 
     // Listen for auth changes
     console.log('Setting up auth state listener...');
