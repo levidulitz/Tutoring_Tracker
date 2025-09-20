@@ -1,7 +1,7 @@
 import { createClient } from '@supabase/supabase-js'
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ghwzpfdmwurlxhppatlp.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Imdod3pwZmRtd3VybHhocHBhdGxwIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NTYxMjU1NzQsImV4cCI6MjA3MTcwMTU3NH0.rgzSctJnm5YZQUWuLSJQVJIWA6CubPpfHGss6g5Hm6U'
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_3YAxc1ZRrWeyGMhx6wDq2A_Pa7huvZk'
 
 console.log('=== SUPABASE CONNECTION DEBUG ===');
 console.log('Environment variables:');
