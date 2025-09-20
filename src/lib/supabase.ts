@@ -1,22 +1,12 @@
 import { createClient } from '@supabase/supabase-js'
 
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || 'https://ghwzpfdmwurlxhppatlp.supabase.co'
-const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || 'sb_publishable_3YAxc1ZRrWeyGMhx6wDq2A_Pa7huvZk'
+const supabaseUrl = 'https://ghwzpfdmwurlxhppatlp.supabase.co'
+const supabaseAnonKey = 'sb_publishable_3YAxc1ZRrWeyGMhx6wDq2A_Pa7huvZk'
 
 console.log('=== SUPABASE CONNECTION DEBUG ===');
-console.log('Environment variables:');
-console.log('VITE_SUPABASE_URL:', supabaseUrl);
-console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'Missing');
+console.log('Supabase URL:', supabaseUrl);
+console.log('Supabase Key:', supabaseAnonKey ? `${supabaseAnonKey.substring(0, 20)}...` : 'Missing');
 
-if (!supabaseUrl || !supabaseAnonKey) {
-  console.error('Missing Supabase environment variables');
-  console.log('VITE_SUPABASE_URL:', supabaseUrl ? 'Set' : 'Missing');
-  console.log('VITE_SUPABASE_ANON_KEY:', supabaseAnonKey ? 'Set' : 'Missing');
-} else {
-  console.log('✅ Supabase credentials found');
-}
-
-console.log('Creating Supabase client...');
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
     persistSession: true,
@@ -30,6 +20,18 @@ export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   }
 });
 
+// Test the connection immediately
+console.log('Testing Supabase connection...');
+supabase.auth.getSession().then(({ data, error }) => {
+  if (error) {
+    console.error('❌ Supabase connection error:', error);
+  } else {
+    console.log('✅ Supabase connected successfully');
+    console.log('Session data:', data.session ? 'User logged in' : 'No active session');
+  }
+}).catch(err => {
+  console.error('❌ Supabase connection failed:', err);
+});
 
 export type Database = {
   public: {

@@ -24,6 +24,23 @@ export const useAuth = () => {
     const initializeAuth = async () => {
       try {
         console.log('Getting initial session...');
+        
+        // Test basic connection first
+        const { data: testData, error: testError } = await supabase
+          .from('profiles')
+          .select('count')
+          .limit(1);
+        
+        if (testError) {
+          console.error('❌ Database connection test failed:', testError);
+          if (!mounted) return;
+          setError(`Database connection failed: ${testError.message}`);
+          setLoading(false);
+          return;
+        }
+        
+        console.log('✅ Database connection test passed');
+        
         const { data: { session }, error } = await supabase.auth.getSession();
         
         console.log('Initial session result:', { 
